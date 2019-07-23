@@ -16,6 +16,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
 # implied.  See the License for the specific language governing
 # permissions and limitations under the License.
+
+# Modified by: Nicole Ibrahim 
+
 import fnmatch
 import unicodecsv as csv
 import sys
@@ -26,12 +29,11 @@ import datetime
 from ds_store_parser import ds_store_handler
 from ds_store_parser.ds_store.store import codes as type_codes
 
-__VERSION__ = "0.2.0"
+__VERSION__ = "0.2.1"
 
 folder_access_report = None
 other_info_report = None
 all_records_ds_store_report = None
-error_log = None
 records_parsed = 0
 
 def get_arguments():
@@ -70,13 +72,13 @@ def get_arguments():
         action="store_true",
         default=False,
         required=False,
-        help='While parsing check if record filename in ds_store exists on disk.'
+        help='While parsing check if record filename in ds_store exists.'
     )
     
     return argument_parser
     
 def main():
-    global folder_access_report, other_info_report, all_records_ds_store_report, error_log, records_parsed
+    global folder_access_report, other_info_report, all_records_ds_store_report, records_parsed
 
     arguments = get_arguments()
     options = arguments.parse_args()
@@ -86,22 +88,19 @@ def main():
     opts_source = options.source
     opts_out = options.outdir
     opts_check = options.files_exists
+    timestr = strftime("%Y%m%d-%H%M%S")
     
     try:
         folder_access_report = open(
-                os.path.join(opts_out, 'DS_Store-Folder_Access_Report.tsv'),
+                os.path.join(opts_out, 'DS_Store-Folder_Access_Report-%s.tsv' % timestr),
                 'wb'
             )
         other_info_report = open(
-                os.path.join(opts_out, 'DS_Store-Miscellaneous_Info_Report.tsv'),
+                os.path.join(opts_out, 'DS_Store-Miscellaneous_Info_Report-%s.tsv' % timestr),
                 'wb'
             )
         all_records_ds_store_report = open(
-                os.path.join(opts_out, 'DS_Store-All_Parsed_Report.tsv'),
-                'wb'
-            )
-        error_log = open(
-                os.path.join(opts_out, 'error_log.txt'),
+                os.path.join(opts_out, 'DS_Store-All_Parsed_Report-%s.tsv' % timestr),
                 'wb'
             )
             
@@ -153,7 +152,6 @@ def parse(ds_file, record_handler, source, opts_check):
             ds_file.encode('utf-8', errors='replace')
             )
         print err_msg.replace('\n', '')
-        error_log.writelines(err_msg)
             
     if ds_handler:
         print "DS_Store Found: ", ds_file.encode('utf-8', errors='replace')
@@ -187,16 +185,16 @@ def commandline_arg(bytestring):
     
 class RecordHandler(object):
     def __init__(self, opts_check):
-        global folder_access_report, other_info_report, all_records_ds_store_report, error_log
+        global folder_access_report, other_info_report, all_records_ds_store_report
         
         if opts_check:
             fields = [
-                u"generated_fullpath", 
-                u"filename", 
+                u"generated_path", 
+                u"record_filename",  # filename
+                u"record_type",      # code
+                u"record_format",    # type
+                u"record_data",      # value
                 u"file_exists", 
-                u"value", 
-                u"type", 
-                u"code",
                 u"src_create_time",
                 u"src_mod_time",
                 u"src_acc_time",
@@ -208,11 +206,11 @@ class RecordHandler(object):
         
         else:
             fields = [
-                u"generated_fullpath", 
-                u"filename", 
-                u"value", 
-                u"type", 
-                u"code",
+                u"generated_path", 
+                u"record_filename",  # filename
+                u"record_type",      # code
+                u"record_format",    # type
+                u"record_data",      # value
                 u"src_create_time",
                 u"src_mod_time",
                 u"src_acc_time",
@@ -221,7 +219,8 @@ class RecordHandler(object):
                 u"src_size",
                 u"block",
                 u"src_file"]
-                
+
+        
         # Codes that do not always mean that a folder was opened
         # Some codes are for informational purposes and may indicate
         # the parent was opened not the path reported
@@ -295,12 +294,18 @@ class RecordHandler(object):
         )
         
         self.oi_writer.writeheader()
+        
+        # Rename fields to match record parsing
+        fields[1] = u'filename'
+        fields[2] = u'code'
+        fields[3] = u'type'
+        fields[4] = u'value'
 
     def write_record(self, record, ds_file, source, stat_dict, opts_check):
         global records_parsed
         if type(record) == dict:
             record_dict = record
-            record_dict["generated_fullpath"] = 'EMPTY DS_STORE: ' + ds_file
+            record_dict["generated_path"] = 'EMPTY DS_STORE: ' + ds_file
             record_dict["block"] = ''
         else:
             record_dict = record.as_dict()
@@ -308,7 +313,7 @@ class RecordHandler(object):
             record_dict = record_dict[0]
             record_dict["block"] = block
             filename = record_dict["filename"]
-            record_dict["generated_fullpath"] = self.generate_fullpath(source, ds_file, filename)
+            record_dict["generated_path"] = self.generate_fullpath(source, ds_file, filename)
             
             if opts_check:
                 abs_path_to_rec_file = os.path.join(os.path.split(ds_file)[0], filename)
@@ -326,11 +331,13 @@ class RecordHandler(object):
             if record_dict["code"] == "vstl":
                 record_dict["value"] = unicode(self.style_handler(record_dict))
                 
-            record_dict["value"] = unicode(self.update_descriptor(record_dict)) + unicode(record_dict["value"])
+            record_dict["value"] = unicode(record_dict["value"])
+            
             records_parsed = records_parsed + 1
             
         record_dict["value"] = record_dict["value"].replace('\r','').replace('\n','').replace('\t','')
-        record_dict["generated_fullpath"] = record_dict["generated_fullpath"].replace('\r','').replace('\n','').replace('\t','')
+        
+        record_dict["generated_path"] = record_dict["generated_path"].replace('\r','').replace('\n','').replace('\t','')
         record_dict["src_file"] = ds_file.replace('\r','').replace('\n','').replace('\t','')
         record_dict["filename"] = record_dict["filename"].replace('\r','').replace('\n','').replace('\t','')
         record_dict["src_metadata_change_time"] = stat_dict['src_metadata_change_time'] 
@@ -344,13 +351,17 @@ class RecordHandler(object):
             str(stat_dict['src_uid']),
             str(stat_dict['src_gid'])
            )
+        if 'Codec' in record_dict["type"]:
+            record_dict["type"] = 'blob (%s)' % record_dict["type"]
 
         self.fa_writer.writerow(record_dict)
-        
+
         if record_dict["code"] in self.other_info_codes:
+            record_dict["code"] = record_dict["code"] + " (" + unicode(self.update_descriptor(record_dict)) + ")"
             self.oi_writer.writerow(record_dict)
             
         elif record_dict["code"] in self.folder_interactions:
+            record_dict["code"] = record_dict["code"] + " (" + unicode(self.update_descriptor(record_dict)) + ")"
             self.fc_writer.writerow(record_dict)
         elif record_dict["code"] == '':
             pass
@@ -395,39 +406,53 @@ class RecordHandler(object):
             "6": "rw-",
             "7": "rwx"
             }
+            
         perm = oct(perm)
+        
         if len(perm) == 4:
             first = perm[0]
             perm = perm[1:]
+            
         else:
             first = ""
 
         try:
             outperms = ""
+            
             for p in perm:
                 outperms += perms[p]
+                
         except KeyError as e:
             outperms = perm
 
         if first != "":
+        
             if first == '0':
                 pass
+                
             elif first == '1':
                 pass
+                
             elif first == '2':
+            
                 if outperms[5] == 'x':
                     outperms = outperms[:5]+'s'+outperms[6:]
+                    
                 else:
                     outperms = outperms[:5]+'S'+outperms[6:]
+                    
             elif first == '4':
+            
                 if outperms[2] == 'x':
                     outperms = outperms[:2]+'s'+outperms[3:]
+                    
                 else:
                     outperms = outperms[:2]+'S'+outperms[3:]
+                    
             else:
                 outperms = perm
 
-        return "-"+outperms
+        return "Perms: -"+outperms
 
         
     def generate_fullpath(self, source, ds_file, record_filename):
@@ -442,16 +467,16 @@ class RecordHandler(object):
         abs_path_len = len(ds_store_abs_path)
         ds_store_rel_path = os.path.split(ds_file)[0][abs_path_len:]
         
-        generated_fullpath = os.path.join(ds_store_rel_path, record_filename)
-        generated_fullpath = generated_fullpath.replace('\r','').replace('\n','').replace('\t','')
+        generated_path = os.path.join(ds_store_rel_path, record_filename)
+        generated_path = generated_path.replace('\r','').replace('\n','').replace('\t','')
         
         if os.name == 'nt':
-            generated_fullpath = generated_fullpath.replace('\\','/')
+            generated_path = generated_path.replace('\\','/')
             
-        if generated_fullpath[:1] != '/':
-            generated_fullpath = '/' + generated_fullpath
+        if generated_path[:1] != '/':
+            generated_path = '/' + generated_path
             
-        return generated_fullpath
+        return generated_path
 
         
     def update_descriptor(self, record):
@@ -468,13 +493,13 @@ class RecordHandler(object):
         
     def style_handler(self, record):
         styles_dict = {
-            '\x00\x00\x00\x00': u"Null",
-            "none": u"Unselected",
-            "icnv": u"Icon View",
-            "clmv": u"Column View",
-            "Nlsv": u"List View",
-            "glyv": u"Gallery View",
-            "Flwv": u"CoverFlow View"
+            '\x00\x00\x00\x00': u"0x00000000: Null",
+            "none": u"none: Unselected",
+            "icnv": u"icnv: Icon View",
+            "clmv": u"clmv: Column View",
+            "Nlsv": u"Nlsv: List View",
+            "glyv": u"glyv: Gallery View",
+            "Flwv": u"Flwv: CoverFlow View"
             }
 
         try: 
