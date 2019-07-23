@@ -158,48 +158,48 @@ codecs = {
     }
     
 codes = {
-    "BKGD": u"Finder Folder Background Picture: ",
-    "ICVO": u"Icon View Options: ",
-    "Iloc": u"Icon: ",              # Location and Index
-    "LSVO": u"List View Options: ",
-    "bwsp": u"Finder Window Work Space Properties: ",
-    "cmmt": u"Spotlight Comments: ",
-    "clip": u"Text Clipping: ",
-    "dilc": u"Desktop Icon Location: ",
-    "dscl": u"Directory is Expanded in List View: ",
-    "fdsc": u"Directory is Expanded in Limited Finder Window: ",
-    "extn": u"File Extension: ",
-    "fwi0": u"Finder Window Information: ",
-    "fwsw": u"Finder Window Sidebar Width: ",
-    "fwvh": u"Finder Window Sidebar Height: ",
-    "glvp": u"Gallery View Properties: ",
-    "GRP0": u"Group Items By: ",
-    "icgo": u"icgo. Unknown. Icon View?: ",
-    "icsp": u"icsp. Unknown. Icon View?: ",
-    "icvo": u"Icon View Options: ",
-    "icvp": u"Icon View Properties: ",
-    "icvt": u"Icon View Text Size: ",
+    "BKGD": u"Finder Folder Background Picture",
+    "ICVO": u"Icon View Options",
+    "Iloc": u"Icon Location",              # Location and Index
+    "LSVO": u"List View Options",
+    "bwsp": u"Browser Window Settings",
+    "cmmt": u"Finder Comments",
+    "clip": u"Text Clipping",
+    "dilc": u"Desktop Icon Location",
+    "dscl": u"Directory is Expanded in List View",
+    "fdsc": u"Directory is Expanded in Limited Finder Window",
+    "extn": u"File Extension",
+    "fwi0": u"Finder Window Information",
+    "fwsw": u"Finder Window Sidebar Width",
+    "fwvh": u"Finder Window Sidebar Height",
+    "glvp": u"Gallery View Settings",
+    "GRP0": u"Group Items By",
+    "icgo": u"icgo. Unknown. Icon View?",
+    "icsp": u"icsp. Unknown. Icon View?",
+    "icvo": u"Icon View Options",
+    "icvp": u"Icon View Settings",
+    "icvt": u"Icon View Text Size",
     "info": u"info: Unknown. Finder Info?:",
-    "logS": u"Logical Size: ",
-    "lg1S": u"Logical Size: ",
-    "lssp": u"List View Scroll Position: ",
-    "lsvC": u"List View Columns: ",
-    "lsvo": u"List View Options: ",
-    "lsvt": u"List View Text Size: ",
-    "lsvp": u"List View Properties: ",
-    "lsvP": u"List View Properties: ",
-    "modD": u"Modified Date: ",
-    "moDD": u"Modified Date: ",
-    "phyS": u"Physical Size: ",
-    "ph1S": u"Physical Size: ",
-    "pict": u"Background Image: ",
-    "vSrn": u"Opened Folder in new tab: ",
-    "bRsV": u"Browse in Selected View: ",
-    "pBBk": u"Finder Folder Background Image Bookmark: ",
-    "pBB0": u"Finder Folder Background Image Bookmark: ",
-    "vstl": u"View Style: ",
-    "ptbL": u"Trash Put Back Location: ",
-    "ptbN": u"Trash Put Back Name: "
+    "logS": u"Logical Size",
+    "lg1S": u"Logical Size",
+    "lssp": u"List View Scroll Position",
+    "lsvC": u"List View Columns",
+    "lsvo": u"List View Options",
+    "lsvt": u"List View Text Size",
+    "lsvp": u"List View Settings",
+    "lsvP": u"List View Settings",
+    "modD": u"Modified Date",
+    "moDD": u"Modified Date",
+    "phyS": u"Physical Size",
+    "ph1S": u"Physical Size",
+    "pict": u"Background Image",
+    "vSrn": u"Opened Folder in new tab",
+    "bRsV": u"Browse in Selected View",
+    "pBBk": u"Finder Folder Background Image Bookmark",
+    "pBB0": u"Finder Folder Background Image Bookmark",
+    "vstl": u"View Style Selected",
+    "ptbL": u"Trash Put Back Location",
+    "ptbN": u"Trash Put Back Name"
 }
 
 types = (
@@ -354,7 +354,7 @@ class DSStore(object):
     def _traverse(self, node):
         counter = 0
         self.src_name = self._store._file.name
-
+        
         if node is None:
             node = self._rootnode
         with self._get_block(node) as block:
@@ -433,18 +433,25 @@ class DSStore(object):
         
     def read_slack(self, slack, node):
         slack = slack.decode('hex')
+        
         search_exp = '('
         
         for k in codes.keys():
             for t in types:
                 search_exp = search_exp + k + t + '|'
+                
         search_exp = search_exp[:-1] + ')'
+        
         p = re.compile('\x00\x00\x00[\x01-\xff](\x00[\x01-\xff]){1,}%s' % (search_exp))
+        
         s_offset = p.search(slack)
+        
         if s_offset:
             s_offset = s_offset.span()[0]
+            
         sub_search = re.finditer('\x00\x00\x00[\x01-\xff](\x00[\x01-\xff]){1,}%s' % (search_exp), slack)
         counter = 0
+        
         for match in sub_search:
             counter = counter + 1
             if match.regs[0][0] == s_offset:
@@ -496,8 +503,8 @@ class DSStore(object):
                         
                     else:
                         raise ValueError('Unknown type code "%s"' % typecode)
-                except:
-                    print('unable to parse entry')
+                except Exception as e:
+                    print('File: %s. unable to parse entry. Error: %s' % (self.src_name, str(e)))
                     continue
 
                     
@@ -515,6 +522,6 @@ class DSStore(object):
                     self.dict_list[e_hash] = chk + ' reallocated'
                     
                 else:
-                    print('hereeeeeeeeeeeeeeeeeee')
+                    print('File: %s. unknown exception in store.py' % (self.src_name))
                     pass
 
