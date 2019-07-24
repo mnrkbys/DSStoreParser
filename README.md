@@ -18,9 +18,6 @@ optional arguments:
                         The source path to search recursively for .DS_Store
                         files to parse.
   -o OUTDIR, --out OUTDIR
-                        The destination folder for generated reports.
-  -f, --files_exist     While parsing check if record filename in ds_store
-                        exists on disk.
 ```
 
 Output Reports
