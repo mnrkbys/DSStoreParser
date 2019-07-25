@@ -162,7 +162,7 @@ codes = {
     "ICVO": u"Icon View Options",
     "Iloc": u"Icon Location",              # Location and Index
     "LSVO": u"List View Options",
-    "bwsp": u"Browser Window Settings",
+    "bwsp": u"Browser Window Properties",
     "cmmt": u"Finder Comments",
     "clip": u"Text Clipping",
     "dilc": u"Desktop Icon Location",
@@ -172,12 +172,12 @@ codes = {
     "fwi0": u"Finder Window Information",
     "fwsw": u"Finder Window Sidebar Width",
     "fwvh": u"Finder Window Sidebar Height",
-    "glvp": u"Gallery View Settings",
+    "glvp": u"Gallery View Properties",
     "GRP0": u"Group Items By",
-    "icgo": u"icgo. Unknown. Icon View?",
-    "icsp": u"icsp. Unknown. Icon View?",
+    "icgo": u"icgo. Unknown. Icon View Options?",
+    "icsp": u"icsp. Unknown. Icon View Properties?",
     "icvo": u"Icon View Options",
-    "icvp": u"Icon View Settings",
+    "icvp": u"Icon View Properties",
     "icvt": u"Icon View Text Size",
     "info": u"info: Unknown. Finder Info?:",
     "logS": u"Logical Size",
@@ -186,8 +186,8 @@ codes = {
     "lsvC": u"List View Columns",
     "lsvo": u"List View Options",
     "lsvt": u"List View Text Size",
-    "lsvp": u"List View Settings",
-    "lsvP": u"List View Settings",
+    "lsvp": u"List View Properties",
+    "lsvP": u"List View Properties",
     "modD": u"Modified Date",
     "moDD": u"Modified Date",
     "phyS": u"Physical Size",
@@ -416,11 +416,11 @@ class DSStore(object):
                         self.dict_list[e_hash] = self.dict_list[e_hash] + ', reallocated in {}'.format(node)
                     else:
                         sys.exit()
-                        
+                '''      
                 if counter == count and block.tell() < len(block):
                     slack = unicode(block)[block.tell() * 2:]
                     self.read_slack(slack, node)
-                
+                '''
                 if self.entries:
                     for key in self.entries:
                         yield self.entries[key]
