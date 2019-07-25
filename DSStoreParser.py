@@ -28,7 +28,27 @@ from time import (gmtime, strftime)
 import datetime
 from ds_store_parser import ds_store_handler
 from ds_store_parser.ds_store.store import codes as type_codes
-
+import StringIO
+'''
+try:
+    from dfvfs.analyzer import analyzer
+    from dfvfs.lib import definitions
+    from dfvfs.path import factory as path_spec_factory
+    from dfvfs.volume import tsk_volume_system
+    from dfvfs.resolver import resolver
+    from dfvfs.lib import raw
+    from dfvfs.helpers import source_scanner
+    DFVFS_IMPORT = True
+    IMPORT_ERROR = None
+    
+except ImportError as exp:
+    DFVFS_IMPORT = False
+    IMPORT_ERROR =("\n%s\n\
+        You have specified the source type as image but DFVFS \n\
+        is not installed and is required for image support. \n\
+        To install DFVFS please refer to \n\
+        http://www.hecfblog.com/2015/12/how-to-install-dfvfs-on-windows-without.html" % (exp))
+'''
 __VERSION__ = "0.2.1"
 
 folder_access_report = None
@@ -64,7 +84,7 @@ def get_arguments():
         required=True,
         help='The destination folder for generated reports.'
     )
-    
+    '''
     argument_parser.add_argument(
         '-f',
         '--files_exist',
@@ -74,7 +94,7 @@ def get_arguments():
         required=False,
         help='While parsing check if record filename in ds_store exists.'
     )
-    
+    ''' 
     return argument_parser
     
 def main():
@@ -82,12 +102,16 @@ def main():
 
     arguments = get_arguments()
     options = arguments.parse_args()
+    '''
+    if os.path.isfile(options.source) and DFVFS_IMPORT is False:
+        options.error(IMPORT_ERROR)
+    '''
     s_path = []
-    s_name = u'*.DS_Store*'
+    s_name = u'*.ds_store*'
     
     opts_source = options.source
     opts_out = options.outdir
-    opts_check = options.files_exists
+    opts_check = False
     timestr = strftime("%Y%m%d-%H%M%S")
     
     try:
@@ -113,23 +137,110 @@ def main():
         opts_source = opts_source[:-1]
     
     record_handler = RecordHandler(opts_check)
+    '''
+    if os.path.isfile(opts_source):
+        scan_path_spec = None
+        scanner = source_scanner.SourceScanner()
+        scan_context = source_scanner.SourceScannerContext()
+        scan_context.OpenSourcePath(opts_source)
 
+        scanner.Scan(
+            scan_context,
+            scan_path_spec=scan_path_spec
+        )
+
+        for file_system_path_spec, file_system_scan_node in scan_context._file_system_scan_nodes.items():
+            
+            try:
+                location = file_system_path_spec.parent.location
+            except:
+                location = file_system_path_spec.location
+                
+            print "  Processing Volume {}.\n".format(location)
+
+            root_path_spec = path_spec_factory.Factory.NewPathSpec(
+                file_system_path_spec.type_indicator,
+                parent=file_system_path_spec.parent,
+                location="/"
+            )
+
+            file_entry = resolver.Resolver.OpenFileEntry(
+                root_path_spec
+            )
+            
+            if file_entry != None:
+                directory_recurse(file_system_path_spec, "/", record_handler, opts_source, opts_check)
+    '''
     for root, dirnames, filenames in os.walk(opts_source):
-        for filename in fnmatch.filter(filenames, s_name):
-            parse(os.path.join(root, filename), record_handler, opts_source, opts_check)
+        #for filename.lower() in fnmatch.filter(filenames.lower(), s_name):
+        for filename in filenames:
+            if fnmatch.fnmatch(filename.lower(), s_name):
+                ds_file = os.path.join(root, filename)
+                file_io = open(ds_file, "rb")
+                stat_dict = {}
+                stat_dict = record_handler.get_stats(os.lstat(ds_file))
+                parse(ds_file, file_io, stat_dict, record_handler, opts_source, opts_check)
 
     print 'Records Parsed: {}'.format(records_parsed)
     print 'Reports are located in {}'.format(options.outdir)
+
+def directory_recurse(file_system_path_spec, parent_path, record_handler, opts_source, opts_check):
+    path_spec = path_spec_factory.Factory.NewPathSpec(
+        file_system_path_spec.type_indicator,
+        parent=file_system_path_spec.parent,
+        location=parent_path
+    )
+
+    file_entry = resolver.Resolver.OpenFileEntry(
+        path_spec
+    )
+    
+    if file_entry != None:
+    
+        for sub_file_entry in file_entry.sub_file_entries:
         
-def parse(ds_file, record_handler, source, opts_check):
+            if sub_file_entry.entry_type == 'directory': 
+                dir_path = os.path.join(parent_path, sub_file_entry.name).replace("\\", "/")
+                    
+                if dir_path.count('/') == 1:
+                    print 'Searching %s for .DS_Stores' % dir_path
+                    
+                new_path_spec = path_spec_factory.Factory.NewPathSpec(
+                    path_spec.type_indicator,
+                    parent=path_spec.parent,
+                    location=dir_path
+                )
+
+                directory_recurse(new_path_spec, dir_path, record_handler, opts_source, opts_check)
+                
+            elif sub_file_entry.name == '.DS_Store':
+                ds_file = os.path.join(parent_path, sub_file_entry.name).replace("\\", "/")
+                file_io = sub_file_entry.GetFileObject()
+                
+                stat_dict = {}
+                
+                setattr(file_io, 'name', ds_file)
+                stats = sub_file_entry.GetStat()
+
+                setattr(stats, 'crtime', sub_file_entry._tsk_file.info.meta.crtime)
+                setattr(stats, 'ctime', sub_file_entry._tsk_file.info.meta.ctime)
+                setattr(stats, 'mtime', sub_file_entry._tsk_file.info.meta.mtime)
+                setattr(stats, 'atime', sub_file_entry._tsk_file.info.meta.atime)
+                setattr(stats, 'mode', int(sub_file_entry._tsk_file.info.meta.mode))
+                
+                stat_dict = record_handler.get_stats_image(stats)
+
+                parse(ds_file, file_io, stat_dict, record_handler, opts_source, opts_check)
+                
+            else:
+                continue
+
+    
+def parse(ds_file, file_io, stat_dict, record_handler, source, opts_check):
     # script will update accessed ts for write access volume in macOS
     # when it reads contents of the file
     
     ds_handler = None
-    stat_dict = {}
-    stat_dict = record_handler.get_stats(os.lstat(ds_file))
-
-    file_io = open(ds_file, "rb")
     
     record = {}
     record['code'] = ''
@@ -303,6 +414,7 @@ class RecordHandler(object):
 
     def write_record(self, record, ds_file, source, stat_dict, opts_check):
         global records_parsed
+
         if type(record) == dict:
             record_dict = record
             record_dict["generated_path"] = 'EMPTY DS_STORE: ' + ds_file
@@ -338,7 +450,13 @@ class RecordHandler(object):
         record_dict["value"] = record_dict["value"].replace('\r','').replace('\n','').replace('\t','')
         
         record_dict["generated_path"] = record_dict["generated_path"].replace('\r','').replace('\n','').replace('\t','')
-        record_dict["src_file"] = ds_file.replace('\r','').replace('\n','').replace('\t','')
+        
+        if os.path.isfile(source):
+            record_dict["src_file"] = source + ", " + ds_file.replace('\r','').replace('\n','').replace('\t','')
+            
+        else:
+            record_dict["src_file"] = ds_file.replace('\r','').replace('\n','').replace('\t','')
+            
         record_dict["filename"] = record_dict["filename"].replace('\r','').replace('\n','').replace('\t','')
         record_dict["src_metadata_change_time"] = stat_dict['src_metadata_change_time'] 
         record_dict["src_acc_time"] = stat_dict['src_acc_time']
@@ -351,20 +469,22 @@ class RecordHandler(object):
             str(stat_dict['src_uid']),
             str(stat_dict['src_gid'])
            )
+           
         if 'Codec' in record_dict["type"]:
             record_dict["type"] = 'blob (%s)' % record_dict["type"]
-
+            
+        check_code = record_dict["code"]
+        
+        record_dict["code"] = record_dict["code"] + " (" + unicode(self.update_descriptor(record_dict)) + ")"
+        
         self.fa_writer.writerow(record_dict)
 
-        if record_dict["code"] in self.other_info_codes:
-            record_dict["code"] = record_dict["code"] + " (" + unicode(self.update_descriptor(record_dict)) + ")"
+        if check_code in self.other_info_codes:
             self.oi_writer.writerow(record_dict)
             
-        elif record_dict["code"] in self.folder_interactions:
-            record_dict["code"] = record_dict["code"] + " (" + unicode(self.update_descriptor(record_dict)) + ")"
+        elif check_code in self.folder_interactions:
             self.fc_writer.writerow(record_dict)
-        elif record_dict["code"] == '':
-            pass
+
         else:
             print 'Code not accounted for.', record_dict["code"]
         
@@ -387,6 +507,24 @@ class RecordHandler(object):
             
         return stat_dict
         
+    def get_stats_image(self, stat_result):
+        stat_dict = {}
+        stat_dict['src_acc_time'] = self.convert_time(stat_result.atime) + ' [UTC]'
+        stat_dict['src_mod_time'] = self.convert_time(stat_result.mtime) + ' [UTC]'
+        stat_dict['src_perms'] = self.perm_to_text(stat_result.mode)
+        stat_dict['src_size'] = stat_result.size
+        stat_dict['src_uid'] = stat_result.uid
+        stat_dict['src_gid'] = stat_result.gid
+
+
+        try:
+            stat_dict['src_birth_time'] = self.convert_time(stat_result.crtime) + ' [UTC]'
+            stat_dict['src_metadata_change_time'] = self.convert_time(stat_result.ctime) + ' [UTC]'
+        except:
+            stat_dict['src_birth_time'] = self.convert_time(stat_result.ctime) + ' [UTC]'
+            stat_dict['src_metadata_change_time'] = ''
+            
+        return stat_dict
 
     def convert_time(self, timestamp):
         return unicode(datetime.datetime.utcfromtimestamp(timestamp))
@@ -406,8 +544,8 @@ class RecordHandler(object):
             "6": "rw-",
             "7": "rwx"
             }
-            
-        perm = oct(perm)
+        m_perm = perm
+        perm = oct(int(perm))
         
         if len(perm) == 4:
             first = perm[0]
@@ -452,7 +590,7 @@ class RecordHandler(object):
             else:
                 outperms = perm
 
-        return "Perms: -"+outperms
+        return "Perms: %s/-%s" % (str(m_perm), outperms)
 
         
     def generate_fullpath(self, source, ds_file, record_filename):
@@ -463,9 +601,12 @@ class RecordHandler(object):
         The generated full path will be the relative path to the DS_Store being
         parsed plus the file name for the record entry.
         '''
-        ds_store_abs_path = os.path.split(source)[0]
-        abs_path_len = len(ds_store_abs_path)
-        ds_store_rel_path = os.path.split(ds_file)[0][abs_path_len:]
+        if os.path.isfile(source):
+            ds_store_rel_path = os.path.split(ds_file)[0]
+        else:
+            ds_store_abs_path = os.path.split(source)[0]
+            abs_path_len = len(ds_store_abs_path)
+            ds_store_rel_path = os.path.split(ds_file)[0][abs_path_len:] 
         
         generated_path = os.path.join(ds_store_rel_path, record_filename)
         generated_path = generated_path.replace('\r','').replace('\n','').replace('\t','')
@@ -475,7 +616,7 @@ class RecordHandler(object):
             
         if generated_path[:1] != '/':
             generated_path = '/' + generated_path
-            
+
         return generated_path
 
         
