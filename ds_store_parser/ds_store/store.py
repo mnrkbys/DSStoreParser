@@ -350,6 +350,14 @@ class DSStore(object):
     def _get_block(self, number):
         return self._store.get_block(number)
 
+    def _build_str_from_entry(self, entry):
+        chk = entry.filename.encode('utf-8', 'replace') + str(entry.type) + str(entry.code) + self.src_name.encode('utf-8', 'replace')
+        if entry.type == 'ustr':
+            chk += entry.value.encode('utf-8')
+        else:
+            chk += str(entry.value).encode('hex')
+        return chk
+
     # Iterate over the tree, starting at `node'
     def _traverse(self, node):
         counter = 0
@@ -369,13 +377,13 @@ class DSStore(object):
                         yield t
                     
                     e = DSStoreEntry.read(block, node)
-                    chk = e.filename.encode('ascii', 'replace') + str(e.type) + str(e.code) + self.src_name.encode('ascii', 'replace') + str(e.value).encode('hex')
+                    chk = self._build_str_from_entry(e)
                     e_hash = hashlib.md5(chk).hexdigest()
                     
                     if not self.dict_list.has_key(e_hash):
                         self.entries[e_hash] = e
                         self.entries[e_hash].node = 'allocated ' + str(node)
-                        self.dict_list[e_hash] = chk + 'allocated ' + str(node)
+                        self.dict_list[e_hash] = chk + 'allocated '.encode('utf-8') + str(node).encode('utf-8')
                         
                     elif self.dict_list.has_key(e_hash) and 'unallocated' in self.dict_list[e_hash]:
                         self.entries[e_hash] = e
@@ -402,13 +410,13 @@ class DSStore(object):
                 for n in range(count):
                     counter = counter + 1
                     e = DSStoreEntry.read(block, node)
-                    chk = e.filename.encode('ascii', 'replace') + str(e.type) + str(e.code) + self.src_name.encode('ascii', 'replace') + str(e.value).encode('hex')
+                    chk = self._build_str_from_entry(e)
                     e_hash = hashlib.md5(chk).hexdigest()
                     
                     if not self.dict_list.has_key(e_hash):
                         self.entries[e_hash] = e
                         self.entries[e_hash].node = 'allocated ' + str(node)
-                        self.dict_list[e_hash] = chk + 'allocated ' + str(node)
+                        self.dict_list[e_hash] = chk + 'allocated '.encode('utf-8') + str(node).encode('utf-8')
                         
                     elif self.dict_list.has_key(e_hash) and 'unallocated' in self.dict_list[e_hash]:
                         self.entries[e_hash] = e
@@ -509,7 +517,7 @@ class DSStore(object):
 
                     
                 e = DSStoreEntry(filename, code, typecode, value, 'unallocated')
-                chk = e.filename.encode('ascii', 'replace') + str(e.type) + str(e.code) + self.src_name.encode('ascii', 'replace') + str(e.value).encode('hex')
+                chk = self._build_str_from_entry(e)
                 e_hash = hashlib.md5(chk).hexdigest()
                 
                 if not self.dict_list.has_key(e_hash):
